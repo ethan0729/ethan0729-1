@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>3D 骰子方位盤 - 逆時針向心版</title>
+    <style>
+        :root {
+            --dice-size: 70px;
+            --transition-time: 2s;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: white;
+            font-family: "Microsoft JhengHei", sans-serif;
+        }
+
+        /* 黑色實框容器 */
+        .main-frame {
+            position: relative;
+            width: 450px;
+            height: 450px;
+            border: 6px solid black; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: white;
+        }
+
+        /* 方位文字樣式：文字頂部全部朝向圓心 */
+        /* 佈局：東(上)、南(左)、西(下)、北(右) -> 逆時針 */
+        .direction {
+            position: absolute;
+            font-size: 36px;
+            font-weight: 900;
+            color: black;
+            z-index: 5;
+        }
+        .east  { top: 15px; transform: rotate(0deg); }       /* 東在上 */
+        .south { left: 15px; transform: rotate(-90deg); }   /* 南在左 (東的左手邊)，轉-90度朝內 */
+        .west  { bottom: 15px; transform: rotate(180deg); }  /* 西在下，轉180度朝內 */
+        .north { right: 15px; transform: rotate(90deg); }    /* 北在右，轉90度朝內 */
+
+        /* 中心點數顯示：置於畫面正中央 */
+        #score-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 80px;
+            font-weight: 900;
+            color: rgba(200, 0, 0, 0.2); /* 半透明紅色，避免遮擋骰子 */
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* 骰子堆疊容器 */
+        .pyramid-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            perspective: 1200px;
+            z-index: 10; /* 確保骰子在數字上方 */
+        }
+        .row { display: flex; gap: 20px; }
+
+        /* 3D 骰子 */
+        .dice {
+            width: var(--dice-size);
+            height: var(--dice-size);
+            transform-style: preserve-3d;
+            transition: transform var(--transition-time) cubic-bezier(0.15, 0.8, 0.3, 1);
+        }
+        .dice-face {
+            position: absolute;
+            width: var(--dice-size);
+            height: var(--dice-size);
+            background: white;
+            border: 2px solid black;
+            border-radius: 10px;
+            display: grid;
+            grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+            padding: 6px;
+            box-sizing: border-box;
+        }
+
+        /* 3D 面定位 */
+        .face-1 { transform: rotateY(0deg)   translateZ(35px); }
+        .face-2 { transform: rotateY(180deg) translateZ(35px); }
+        .face-3 { transform: rotateY(90deg)  translateZ(35px); }
+        .face-4 { transform: rotateY(-90deg) translateZ(35px); }
+        .face-5 { transform: rotateX(90deg)  translateZ(35px); }
+        .face-6 { transform: rotateX(-90deg) translateZ(35px); }
+
+        .dot { width: 12px; height: 12px; border-radius: 50%; background: black; align-self: center; justify-self: center; }
+        .dot.red { background: #d00; width: 16px; height: 16px; }
+        .f1 { grid-area: 2/2; }
+        .f2_1 { grid-area: 1/1; } .f2_2 { grid-area: 3/3; }
+        .f3_1 { grid-area: 1/1; } .f3_2 { grid-area: 2/2; } .f3_3 { grid-area: 3/3; }
+        .f4_1 { grid-area: 1/1; } .f4_2 { grid-area: 1/3; } .f4_3 { grid-area: 3/1; } .f4_4 { grid-area: 3/3; }
+        .f5_1 { grid-area: 1/1; } .f5_2 { grid-area: 1/3; } .f5_3 { grid-area: 2/2; } .f5_4 { grid-area: 3/1; } .f5_5 { grid-area: 3/3; }
+        .f6_1 { grid-area: 1/1; } .f6_2 { grid-area: 2/1; } .f6_3 { grid-area: 3/1; } .f6_4 { grid-area: 1/3; } .f6_5 { grid-area: 2/3; } .f6_6 { grid-area: 3/3; }
+
+        .btn-roll {
+            margin-top: 50px;
+            padding: 12px 40px;
+            cursor: pointer;
+            background: black;
+            color: white;
+            border: none;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 50px;
+            z-index: 20;
+        }
+        .btn-roll:active { transform: scale(0.9); }
+        .btn-roll:disabled { background: #ccc; }
+    </style>
+</head>
+<body>
+
+    <div class="main-frame">
+        <div id="score-display"></div>
+
+        <div class="direction east">東</div>
+        <div class="direction south">南</div>
+        <div class="direction west">西</div>
+        <div class="direction north">北</div>
+
+        <div class="pyramid-container">
+            <div class="row">
+                <div class="dice" id="d1">
+                    <div class="dice-face face-1"><span class="dot red f1"></span></div>
+                    <div class="dice-face face-2"><span class="dot f2_1"></span><span class="dot f2_2"></span></div>
+                    <div class="dice-face face-3"><span class="dot f3_1"></span><span class="dot f3_2"></span><span class="dot f3_3"></span></div>
+                    <div class="dice-face face-4"><span class="dot f4_1"></span><span class="dot f4_2"></span><span class="dot f4_3"></span><span class="dot f4_4"></span></div>
+                    <div class="dice-face face-5"><span class="dot f5_1"></span><span class="dot f5_2"></span><span class="dot f5_3"></span><span class="dot f5_4"></span><span class="dot f5_5"></span></div>
+                    <div class="dice-face face-6"><span class="dot f6_1"></span><span class="dot f6_2"></span><span class="dot f6_3"></span><span class="dot f6_4"></span><span class="dot f6_5"></span><span class="dot f6_6"></span></div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="dice" id="d2">
+                    <div class="dice-face face-1"><span class="dot red f1"></span></div>
+                    <div class="dice-face face-2"><span class="dot f2_1"></span><span class="dot f2_2"></span></div>
+                    <div class="dice-face face-3"><span class="dot f3_1"></span><span class="dot f3_2"></span><span class="dot f3_3"></span></div>
+                    <div class="dice-face face-4"><span class="dot f4_1"></span><span class="dot f4_2"></span><span class="dot f4_3"></span><span class="dot f4_4"></span></div>
+                    <div class="dice-face face-5"><span class="dot f5_1"></span><span class="dot f5_2"></span><span class="dot f5_3"></span><span class="dot f5_4"></span><span class="dot f5_5"></span></div>
+                    <div class="dice-face face-6"><span class="dot f6_1"></span><span class="dot f6_2"></span><span class="dot f6_3"></span><span class="dot f6_4"></span><span class="dot f6_5"></span><span class="dot f6_6"></span></div>
+                </div>
+                <div class="dice" id="d3">
+                    <div class="dice-face face-1"><span class="dot red f1"></span></div>
+                    <div class="dice-face face-2"><span class="dot f2_1"></span><span class="dot f2_2"></span></div>
+                    <div class="dice-face face-3"><span class="dot f3_1"></span><span class="dot f3_2"></span><span class="dot f3_3"></span></div>
+                    <div class="dice-face face-4"><span class="dot f4_1"></span><span class="dot f4_2"></span><span class="dot f4_3"></span><span class="dot f4_4"></span></div>
+                    <div class="dice-face face-5"><span class="dot f5_1"></span><span class="dot f5_2"></span><span class="dot f5_3"></span><span class="dot f5_4"></span><span class="dot f5_5"></span></div>
+                    <div class="dice-face face-6"><span class="dot f6_1"></span><span class="dot f6_2"></span><span class="dot f6_3"></span><span class="dot f6_4"></span><span class="dot f6_5"></span><span class="dot f6_6"></span></div>
+                </div>
+            </div>
+        </div>
+        
+        <button class="btn-roll" id="roll-btn" onclick="roll()">擲骰</button>
+    </div>
+
+    <script>
+        function roll() {
+            const btn = document.getElementById('roll-btn');
+            const scoreDisplay = document.getElementById('score-display');
+            btn.disabled = true;
+            scoreDisplay.innerText = ""; // 旋轉時先清空
+
+            let results = [];
+
+            for(let i=1; i<=3; i++) {
+                const d = document.getElementById('d' + i);
+                const res = Math.floor(Math.random() * 6) + 1;
+                results.push(res);
+                
+                const rx = (Math.floor(Math.random() * 4) + 6) * 360;
+                const ry = (Math.floor(Math.random() * 4) + 6) * 360;
+                
+                let tx = 0, ty = 0;
+                switch(res) {
+                    case 1: tx = 0;   ty = 0;   break;
+                    case 2: tx = 0;   ty = 180; break;
+                    case 3: tx = 0;   ty = -90; break;
+                    case 4: tx = 0;   ty = 90;  break;
+                    case 5: tx = -90; ty = 0;   break;
+                    case 6: tx = 90;  ty = 0;   break;
+                }
+                d.style.transform = `rotateX(${rx + tx}deg) rotateY(${ry + ty}deg)`;
+            }
+
+            setTimeout(() => {
+                btn.disabled = false;
+            }, 2000);
+        }
+    </script>
+    <style>
+    /* 使用 !important 確保覆寫原本的黑色設定 */
+    .is-banker {
+        color: #d00 !important;
+        text-shadow: 0 0 10px rgba(221, 0, 0, 0.3);
+        transition: all 0.3s ease;
+    }
+    
+    /* 滑鼠懸停效果，提示可以點擊 */
+    .direction {
+        cursor: pointer;
+        user-select: none;
+    }
+    .direction:hover {
+        opacity: 0.7;
+    }
+</style>
+
+<style>
+    /* 左上角三根灰色實線按鈕 */
+    #settings-trigger {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        width: 30px;
+        height: 22px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        cursor: pointer;
+        z-index: 1000;
+    }
+    #settings-trigger span {
+        display: block;
+        width: 100%;
+        height: 4px;
+        background-color: #888;
+        border-radius: 2px;
+    }
+
+    /* 設定面板 */
+    #settings-panel {
+        position: fixed;
+        top: 55px;
+        left: 20px;
+        background: white;
+        border: 2px solid black;
+        padding: 15px;
+        z-index: 1001;
+        display: none;
+        box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+        border-radius: 8px;
+    }
+    #settings-panel label {
+        display: block;
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    #settings-panel input {
+        width: 80px;
+        margin-bottom: 10px;
+        padding: 5px;
+        border: 1px solid black;
+    }
+
+    /* 外部數字樣式：黑色大字、面向外 */
+    .outer-score {
+        position: absolute;
+        font-size: 42px;
+        font-weight: 900;
+        color: black;
+        white-space: nowrap;
+        user-select: none;
+    }
+
+    /* 定位與旋轉：確保文字頂部朝向外側 */
+    .score-top    { top: -60px; left: 50%; transform: translateX(-50%) rotate(180deg); }
+    .score-bottom { bottom: -60px; left: 50%; transform: translateX(-50%) rotate(0deg); }
+    .score-left   { left: -80px; top: 50%; transform: translateY(-50%) rotate(90deg); }
+    .score-right  { right: -80px; top: 50%; transform: translateY(-50%) rotate(-90deg); }
+</style>
+
+<div id="settings-trigger">
+    <span></span><span></span><span></span>
+</div>
+
+<div id="settings-panel">
+    <label>底 (Base):</label>
+    <input type="number" id="base-val" value="0">
+    <label>台數 (Tai):</label>
+    <input type="number" id="tai-val" value="0">
+    <button onclick="calculateAndDisplay()" style="width:100%; cursor:pointer; background:black; color:white; border:none; padding:5px;">更新</button>
+</div>
+
+<script>
+    (function() {
+        // 1. 動態插入顯示數字的容器到 main-frame 中
+        const frame = document.querySelector('.main-frame');
+        const scoreContainer = document.createElement('div');
+        scoreContainer.style.cssText = "position:absolute; width:100%; height:100%; pointer-events:none;";
+        scoreContainer.innerHTML = `
+            <div id="score-T" class="outer-score score-top">0</div>
+            <div id="score-B" class="outer-score score-bottom">0</div>
+            <div id="score-L" class="outer-score score-left">0</div>
+            <div id="score-R" class="outer-score score-right">0</div>
+        `;
+        frame.appendChild(scoreContainer);
+
+        // 2. 選單開關邏輯
+        const trigger = document.getElementById('settings-trigger');
+        const panel = document.getElementById('settings-panel');
+        trigger.onclick = () => {
+            panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
+        };
+
+        // 3. 計算加總並顯示的函式
+        window.calculateAndDisplay = function() {
+            const base = parseInt(document.getElementById('base-val').value) || 0;
+            const tai = parseInt(document.getElementById('tai-val').value) || 0;
+            
+            // 這裡設定加總邏輯，目前設定為：底 + 台數
+            // 如果您的規則是底 100 台 20，請將邏輯改為 base + tai
+            const total = base + tai;
+
+            // 更新四個方位的數字
+            document.getElementById('score-T').innerText = total;
+            document.getElementById('score-B').innerText = total;
+            document.getElementById('score-L').innerText = total;
+            document.getElementById('score-R').innerText = total;
+
+            // 關閉面板
+            panel.style.display = 'none';
+        };
+    })();
+</script>
+<style>
+    /* 登記面板樣式 */
+    #record-panel {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        border: 4px solid black;
+        padding: 30px;
+        z-index: 2000;
+        display: none;
+        box-shadow: 0 0 50px rgba(0,0,0,0.4);
+        border-radius: 15px;
+        min-width: 320px;
+    }
+    
+    .record-row { margin-bottom: 20px; }
+    .record-row label { display: block; font-weight: bold; margin-bottom: 8px; font-size: 16px; }
+    .record-row select, .record-row input { 
+        width: 100%; padding: 10px; font-size: 18px; border: 2px solid black; box-sizing: border-box;
+    }
+
+    .type-group { display: flex; gap: 15px; margin-top: 5px; }
+    .type-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 16px; }
+
+    .btn-container { display: flex; gap: 15px; margin-top: 30px; }
+    .btn-save { background: black; color: white; border: none; padding: 12px; flex: 1; cursor: pointer; font-weight: bold; font-size: 16px; }
+    .btn-close { background: #eee; color: black; border: 2px solid black; padding: 12px; flex: 1; cursor: pointer; font-weight: bold; font-size: 16px; }
+
+    /* 並排按鈕容器 */
+    .action-group {
+        display: flex;
+        gap: 20px;
+        margin-top: 50px;
+        z-index: 100;
+    }
+</style>
+
+<script>
+    (function() {
+        // 1. 初始化按鈕布局
+        const rollBtn = document.getElementById('roll-btn');
+        const actionGroup = document.createElement('div');
+        actionGroup.className = 'action-group';
+        rollBtn.parentNode.insertBefore(actionGroup, rollBtn);
+        
+        const regBtn = document.createElement('button');
+        regBtn.className = 'btn-roll'; // 沿用原本擲骰樣式
+        regBtn.innerText = '登記';
+        regBtn.style.marginTop = '0'; // 修正外邊距
+        
+        actionGroup.appendChild(rollBtn);
+        actionGroup.appendChild(regBtn);
+
+        // 2. 注入登記面板
+        const panel = document.createElement('div');
+        panel.id = 'record-panel';
+        panel.innerHTML = `
+            <h2 style="margin: 0 0 20px 0; text-align:center;">得分登記</h2>
+            <div class="record-row">
+                <label>贏家方位:</label>
+                <select id="winner-pos">
+                    <option value="T">東 (上)</option>
+                    <option value="L">南 (左)</option>
+                    <option value="B">西 (下)</option>
+                    <option value="R">北 (右)</option>
+                </select>
+            </div>
+            <div class="record-row">
+                <label>輸入台數:</label>
+                <input type="number" id="input-tai-count" value="0" min="0">
+            </div>
+            <div class="record-row">
+                <label>類型:</label>
+                <div class="type-group">
+                    <label><input type="radio" name="m-type" value="lose" checked> 放槍</label>
+                    <label><input type="radio" name="m-type" value="self"> 自摸</label>
+                </div>
+            </div>
+            <div id="loser-row" class="record-row">
+                <label>放槍方位 (輸家):</label>
+                <select id="loser-pos">
+                    <option value="T">東</option>
+                    <option value="L">南</option>
+                    <option value="B">西</option>
+                    <option value="R">北</option>
+                </select>
+            </div>
+            <div class="btn-container">
+                <button class="btn-save" onclick="processScore()">確認</button>
+                <button class="btn-close" onclick="document.getElementById('record-panel').style.display='none'">取消</button>
+            </div>
+        `;
+        document.body.appendChild(panel);
+
+        // 3. 顯示/隱藏邏輯
+        regBtn.onclick = () => panel.style.display = 'block';
+        
+        document.getElementsByName('m-type').forEach(radio => {
+            radio.onchange = (e) => {
+                document.getElementById('loser-row').style.display = (e.target.value === 'lose') ? 'block' : 'none';
+            };
+        });
+
+        // 4. 計算核心
+        window.processScore = function() {
+            // 從「設定」中讀取基數
+            const basePrice = parseInt(document.getElementById('base-val').value) || 0;
+            const taiPrice = parseInt(document.getElementById('tai-val').value) || 0;
+            
+            // 從「登記」中讀取輸入
+            const inputTaiCount = parseInt(document.getElementById('input-tai-count').value) || 0;
+            const winner = document.getElementById('winner-pos').value;
+            const type = document.querySelector('input[name="m-type"]:checked').value;
+            const loser = document.getElementById('loser-pos').value;
+
+            // 公式計算：底 + (台數 * 台點)
+            const totalResult = basePrice + (inputTaiCount * taiPrice);
+
+            const allPos = ['T', 'B', 'L', 'R'];
+
+            function updateDisplay(pos, delta) {
+                const el = document.getElementById('score-' + pos);
+                let current = parseInt(el.innerText) || 0;
+                el.innerText = current + delta;
+            }
+
+            if (type === 'lose') {
+                // 放槍邏輯：一人給一人
+                updateDisplay(winner, totalResult);
+                updateDisplay(loser, -totalResult);
+            } else {
+                // 自摸邏輯：贏家拿三份，其他三家各扣一份
+                updateDisplay(winner, totalResult * 3);
+                allPos.forEach(p => {
+                    if (p !== winner) updateDisplay(p, -totalResult);
+                });
+            }
+
+            // 關閉並重置
+            panel.style.display = 'none';
+            document.getElementById('input-tai-count').value = 0;
+        };
+    })();
+</script>
+<script>
+    (function() {
+        // --- 修正 1: 設定面板僅儲存數值，不再複寫顯示 ---
+        window.calculateAndDisplay = function() {
+            const base = parseInt(document.getElementById('base-val').value) || 0;
+            const tai = parseInt(document.getElementById('tai-val').value) || 0;
+            
+            // 提示一下已儲存基準 (選用)
+            console.log(`設定已更新: 底 ${base} / 台點 ${tai}`);
+            
+            // 僅關閉面板，不更動 score-T, score-B 等元素的 innerText
+            document.getElementById('settings-panel').style.display = 'none';
+        };
+
+        // --- 修正 2: 登記邏輯改為「累加」 ---
+        window.processScore = function() {
+            // 1. 從設定欄位取得當前的基準 (底、台點)
+            const basePrice = parseInt(document.getElementById('base-val').value) || 0;
+            const taiPrice = parseInt(document.getElementById('tai-val').value) || 0;
+            
+            // 2. 從登記視窗取得輸入的台數與類型
+            const inputTaiCount = parseInt(document.getElementById('input-tai-count').value) || 0;
+            const winner = document.getElementById('winner-pos').value;
+            const type = document.querySelector('input[name="m-type"]:checked').value;
+            const loser = document.getElementById('loser-pos').value;
+
+            // 3. 計算本次得分：底 + (台數 * 台點)
+            const totalResult = basePrice + (inputTaiCount * taiPrice);
+
+            const allPos = ['T', 'B', 'L', 'R'];
+
+            // 4. 更新函式：使用 += 累加，而不是直接複寫
+            function updateDisplay(pos, delta) {
+                const el = document.getElementById('score-' + pos);
+                let current = parseInt(el.innerText) || 0;
+                el.innerText = current + delta; // 在原有分數上加減
+            }
+
+            if (type === 'lose') {
+                // 放槍：贏家增加，輸家扣除
+                updateDisplay(winner, totalResult);
+                updateDisplay(loser, -totalResult);
+            } else {
+                // 自摸：贏家拿三份，其他三家各扣一份
+                updateDisplay(winner, totalResult * 3);
+                allPos.forEach(p => {
+                    if (p !== winner) updateDisplay(p, -totalResult);
+                });
+            }
+
+            // 5. 關閉並重置
+            document.getElementById('record-panel').style.display = 'none';
+            document.getElementById('input-tai-count').value = 0;
+        };
+    })();
+</script>
+
+<style>
+    /* 確保兩個按鈕的樣式完全統一 */
+    .action-group .btn-roll {
+        margin-top: 0 !important;   /* 移除上方間距以確保垂直居中 */
+        min-width: 140px;           /* 設定最小寬度確保按鈕大小一致 */
+        height: 50px;               /* 設定固定高度 */
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        padding: 0 40px;            /* 統一內距 */
+        box-sizing: border-box;
+    }
+
+    /* 調整並排容器的間距 */
+    .action-group {
+        display: flex;
+        gap: 20px;
+        justify-content: center;
+        align-items: center;
+        margin-top: 50px;
+    }
+</style>
+
+<script>
+    (function() {
+        // 抓取登記按鈕（根據我們之前賦予它的類別或位置）
+        const allButtons = document.querySelectorAll('.btn-roll');
+        
+        allButtons.forEach(btn => {
+            // 強制設定寬度與高度一致
+            btn.style.width = "150px"; 
+            btn.style.height = "55px";
+            btn.style.fontSize = "18px";
+            btn.style.borderRadius = "50px";
+            btn.style.lineHeight = "1";
+        });
+    })();
+</script>
+<style>
+    /* 使用 !important 確保覆寫原本的黑色設定 */
+    .is-banker {
+        color: #d00 !important;
+        text-shadow: 0 0 10px rgba(221, 0, 0, 0.3);
+        transition: all 0.3s ease;
+    }
+    
+    /* 滑鼠懸停效果，提示可以點擊 */
+    .direction {
+        cursor: pointer;
+        user-select: none;
+    }
+    .direction:hover {
+        opacity: 0.7;
+    }
+</style>
+
+<style>
+    /* 莊家變紅色的樣式 */
+    .is-banker {
+        color: #d00 !important;
+        text-shadow: 0 0 10px rgba(221, 0, 0, 0.3);
+        transition: all 0.3s ease;
+    }
+    
+    .direction {
+        cursor: pointer;
+        user-select: none;
+        position: absolute; /* 確保父層定位正確 */
+    }
+
+    /* 連莊次數小數字樣式 */
+    .streak-count {
+        position: absolute;
+        font-size: 20px; /* 比 36px 的方位字小一點 */
+        color: #d00;
+        font-weight: bold;
+        /* 根據方位調整數字位置，放在方位字的右上角 */
+        top: -10px;
+        right: -25px;
+        background: white;
+        border: 1px solid #d00;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+    }
+</style>
+
+<script>
+    (function() {
+        const directions = document.querySelectorAll('.direction');
+
+        directions.forEach(dir => {
+            // 為每個方位初始化一個連莊計數器
+            dir.dataset.streak = 0;
+
+            dir.addEventListener('click', function() {
+                // 1. 檢查是否已經是莊家
+                const isAlreadyBanker = this.classList.contains('is-banker');
+
+                if (!isAlreadyBanker) {
+                    // 如果點擊的是新莊家：
+                    // 清除所有人的紅色與數字
+                    directions.forEach(d => {
+                        d.classList.remove('is-banker');
+                        d.dataset.streak = 0;
+                        const oldBadge = d.querySelector('.streak-count');
+                        if (oldBadge) oldBadge.remove();
+                    });
+
+                    // 設定新莊家
+                    this.classList.add('is-banker');
+                    this.dataset.streak = 0; // 剛上莊通常是連 0
+                } else {
+                    // 如果點擊的是現任莊家：連莊數 +1
+                    let currentStreak = parseInt(this.dataset.streak);
+                    currentStreak++;
+                    this.dataset.streak = currentStreak;
+
+                    // 更新或建立數字標籤
+                    let badge = this.querySelector('.streak-count');
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'streak-count';
+                        this.appendChild(badge);
+                    }
+                    badge.innerText = currentStreak;
+                }
+
+                // 2. 控制台紀錄
+                console.log(`${this.innerText} 莊家，連莊數：${this.dataset.streak}`);
+
+                // 3. 處理背景大數字透明度
+                const scoreDisplay = document.getElementById('score-display');
+                if (scoreDisplay) {
+                    scoreDisplay.style.color = "rgba(200, 0, 0, 0.1)";
+                }
+            });
+        });
+    })();
+</script>
+</body>
+</html>
