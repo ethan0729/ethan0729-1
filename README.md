@@ -1,5 +1,6 @@
 <html lang="zh-TW">
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=no">
     <meta charset="UTF-8">
     <title>3D 骰子方位盤 - 逆時針向心版</title>
     <style>
@@ -684,5 +685,78 @@
         });
     })();
 </script>
+<style>
+    /* 確保身體不會出現捲軸，並讓內容置中 */
+    body {
+        overflow: hidden; 
+        touch-action: manipulation; /* 優化平板點擊延遲 */
+    }
+
+    /* 增加一個包裝層來處理縮放 */
+    .scale-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: 100vh;
+    }
+</style>
+
+<script>
+    (function() {
+        // 1. 在 body 內建立一個包裝層，把 main-frame 放進去
+        const frame = document.querySelector('.main-frame');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'scale-wrapper';
+        frame.parentNode.insertBefore(wrapper, frame);
+        wrapper.appendChild(frame);
+
+        function adjustScale() {
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+            const frameSize = 650; // 考慮到黑框外有數字，預留較大空間
+
+            // 計算縮放比例 (取寬高最小者，並預留邊距)
+            let scale = Math.min(screenW / frameSize, screenH / frameSize);
+            
+            // 如果比例大於 1，就不放大（保持原樣），只在平板等小螢幕縮小
+            if (scale > 1) scale = 1;
+
+            frame.style.transform = `scale(${scale})`;
+            frame.style.transformOrigin = 'center center';
+        }
+
+        // 監聽螢幕旋轉或尺寸變動
+        window.addEventListener('resize', adjustScale);
+        adjustScale(); // 初始化
+    })();
+</script>
+<style>
+    /* 防止使用者長按選取文字 */
+    * {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    /* 讓輸入框可以點擊輸入（排除在外） */
+    input, select {
+        -webkit-user-select: auto;
+        user-select: auto;
+    }
+
+    /* 在平板上微調登記按鈕 */
+    @media (max-width: 1024px) {
+        .btn-roll {
+            font-size: 22px !important; /* 稍微加大字體 */
+            padding: 15px 45px !important;
+        }
+        
+        #settings-trigger {
+            width: 40px;
+            height: 30px; /* 加大左上角設定按鈕方便手指點擊 */
+        }
+    }
+</style>
 </body>
 </html>
